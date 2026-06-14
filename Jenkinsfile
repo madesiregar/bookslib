@@ -57,28 +57,15 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
-            steps {
-                echo 'Deploying with docker compose...'
-
-                withCredentials([file(credentialsId: 'bookslib-env', variable: 'ENV_FILE')]) {
-                    sh '''
-                        cp $ENV_FILE .env
-                        docker compose down || true
-                        docker compose up -d
-                    '''
-                }
-            }
-        }
-    }
-
-    post {
-        success {
-            echo 'Pipeline completed successfully!'
-        }
-
-        failure {
-            echo 'Pipeline failed!'
+stage('Deploy') {
+    steps {
+        echo 'Deploying with docker compose...'
+        withCredentials([file(credentialsId: 'bookslib-env', variable: 'ENV_FILE')]) {
+            sh '''
+                cp $ENV_FILE .env
+                docker compose down || true
+                docker compose up -d
+            '''
         }
     }
 }
