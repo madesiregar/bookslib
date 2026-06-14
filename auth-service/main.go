@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-
+	"time"
 	_ "github.com/lib/pq"
 )
 
@@ -71,21 +71,32 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	var err error
-	db, err = sql.Open("postgres", os.Getenv("DB_DSN"))
+	dsn := os.Getenv("DB_DSN")
+
+	// Retry loop — tunggu DB ready
+	for i := 0; i < 10; i++ {
+		db, err = sql.Open("postgres", dsn)
+		if err == nil {
+			err = db.Ping()
+		}
+		if err == nil {
+			break
+		}
+		log.Printf("DB not ready, retrying in 3s... (%d/10)", i+1)
+		time.Sleep(3 * time.Second)
+	}
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Could not connect to DB:", err)
 	}
 
 	_, err = db.Exec("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password TEXT)")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	db.Exec("INSERT INTO users (username, password) VALUES ('admin', 'password') ON CONFLICT DO NOTHING")
 
 	http.HandleFunc("/login", loginHandler)
 	http.HandleFunc("/register", registerHandler)
-	
 	log.Println("Auth service running on port 8081")
 	http.ListenAndServe(":8081", nil)
 }
