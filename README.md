@@ -1,103 +1,108 @@
-# BooksLib - Your Simple CRUD Book Library Management
+# BooksLib - DevSecOps CI/CD Pipeline (Track A)
 
-**BooksLib** adalah aplikasi manajemen perpustakaan modern berbasis arsitektur mikroservis. Proyek ini mendemonstrasikan integrasi berbagai *stack* teknologi populer dalam satu ekosistem yang diorkestrasi menggunakan Docker.
+## Arsitektur & Workflow
 
-## 🏗️ Arsitektur Sistem
+Developer → GitHub (Git Flow) → Jenkins Pipeline
 
-Aplikasi ini dibagi menjadi beberapa layanan independen yang berkomunikasi melalui API:
+│
 
-| Layanan | Teknologi | Fungsi Utama | Port |
-| --- | --- | --- | --- |
-| **Frontend** | ReactJS (Vite) | Antarmuka pengguna dengan tema monokrom. | `3000` |
-| **Auth Service** | Golang | Menangani registrasi user, login, dan manajemen identitas. | `8081` |
-| **Books Service** | .NET 8 Core | Mengelola data buku (Tambah, Lihat, Hapus, Cari). | `8082` |
-| **Reviews Service** | Python Django | Mengelola ulasan dan rating untuk setiap buku. | `8083` |
-| **Database** | PostgreSQL 15 | Penyimpanan data relasional terpusat. | `5432` |
+┌─────────────────┼─────────────────┐
 
----
+│                 │                 │
 
-## 🚀 Fitur Utama
+SAST Scan         Build Image        Image Scan
 
-* **Manajemen Akun**: Registrasi pengguna baru dan autentikasi masuk.
-* **Manajemen Katalog**: Operasi CRUD (Create, Read, Delete) untuk koleksi buku.
-* **Pencarian Pintar**: Fitur pencarian buku berdasarkan judul.
-* **Sistem Ulasan**: Pengguna dapat memberikan ulasan teks dan rating bintang pada buku.
-* **Infrastruktur Otomatis**: Migrasi database dan pembuatan tabel dilakukan otomatis saat aplikasi dijalankan.
-* **Data Persisten**: Menggunakan Docker Volume untuk memastikan data tidak hilang saat kontainer dihentikan.
+(Bandit/Gosec)    (docker compose)      (Trivy)
 
----
+│                 │                 │
 
-## 📁 Struktur Folder
+└─────────────────┼─────────────────┘
 
-```text
-bookslib/
-├── auth-service/       # Backend service berbasis Go
-├── books-service/      # Backend service berbasis .NET 8
-├── reviews-service/    # Backend service berbasis Django
-├── frontend/           # Aplikasi Client berbasis React
-├── init.sql            # Script awal untuk skema database
-├── docker-compose.yml  # Konfigurasi Docker Compose
-└── .env                # Konfigurasi variabel lingkungan
+│
 
-```
+Deploy
 
----
+(docker compose)
 
-## 🛠️ Cara Menjalankan Aplikasi
+## Services
+- **auth-service** - Go (port 8081)
+- **books-service** - .NET 8 (port 8082)
+- **reviews-service** - Python/Django (port 8083)
+- **frontend** - React/Nginx (port 3000)
+- **db** - PostgreSQL 15
 
-### 1. Prasyarat
+## Git Flow Strategy
+- `main` → production
+- `develop` → integration
+- `feature/*` → fitur baru
+- `hotfix/*` → perbaikan urgent
 
-Pastikan Anda sudah menginstal **Docker** dan **Docker Compose** di mesin Anda.
+## Pipeline Stages
+1. **Checkout** - clone repo
+2. **SAST - Bandit** - scan Python (reviews-service)
+3. **SAST - Gosec** - scan Go (auth-service)
+4. **Build** - build semua Docker image
+5. **Image Scan - Trivy** - scan vulnerabilities di image
+6. **Deploy** - deploy dengan docker-compose
 
-### 2. Konfigurasi
+## Cara Menjalankan
 
-Aplikasi menggunakan variabel lingkungan untuk koneksi antar servis. Pastikan file `.env` di root dan `frontend/.env` sudah terkonfigurasi (default sudah tersedia untuk dijalankan di lokal).
+### Prerequisites
+- Docker & Docker Compose
+- Jenkins (via Docker)
 
-### 3. Menjalankan Kontainer
-
-Jalankan perintah berikut di terminal pada direktori root proyek:
-
+### 1. Clone Repository
 ```bash
-docker compose up -d --build
+git clone https://github.com/madesiregar/bookslib.git
+cd bookslib
 ```
 
-Docker akan secara otomatis melakukan:
+### 2. Setup Environment
+```bash
+cp .env.example .env
+# Edit .env sesuai kebutuhan
+```
 
-1. Pembangunan *image* untuk setiap servis.
-2. Menjalankan *unit test* di dalam tahap *build*.
-3. Menjalankan PostgreSQL dan menunggu hingga statusnya *healthy*.
-4. Menjalankan semua servis backend dan frontend.
+### 3. Jalankan Aplikasi
+```bash
+docker compose up --build
+```
 
-### 4. Akses Aplikasi
+Akses di:
+- Frontend: http://localhost:3000
+- Auth: http://localhost:8081
+- Books: http://localhost:8082
+- Reviews: http://localhost:8083
 
-Buka peramban Anda dan akses:
+### 4. Jalankan Jenkins
+```bash
+docker run -d --name jenkins \
+  -p 8090:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v jenkins_home:/var/jenkins_home \
+  jenkins/jenkins:lts
+```
 
-* **Web UI**: `http://localhost:3000`
-* **Default Login**: Username: `admin`, Password: `password`
+## Security Findings (Trivy Scan)
+Pipeline menemukan vulnerabilities pada:
+- **auth-service**: 19 CVEs (2 CRITICAL, 17 HIGH) - OpenSSL, musl, Go stdlib outdated
+- **reviews-service**: 30 CVEs (2 CRITICAL, 26 HIGH) - Django 4.2.7 outdated, Debian packages
 
----
+## Trade-off & Keputusan Teknis
+- **Jenkins** dipilih karena requirement wajib
+- **Trivy** untuk image scanning karena gratis, cepat, dan comprehensive
+- **Bandit + Gosec** untuk SAST karena native ke masing-masing bahasa
+- `|| true` di scan stages agar pipeline tidak stop saat ada findings (report-only mode)
 
-## 🧪 Pengujian (Unit Testing)
+## Kendala
+- Port 8080 bentrok dengan XAMPP → Jenkins dipindah ke port 8090
+- auth-service crash saat startup karena race condition dengan DB → fix dengan retry loop
+- Gosec tidak bisa install karena versi Go 1.20 tidak kompatibel dengan gosec terbaru
 
-Setiap mikroservis dilengkapi dengan *unit test* sederhana untuk memastikan logika dasar berjalan dengan benar. Pengujian dijalankan otomatis saat proses `docker build`.
-
-* **Go**: `go test`
-* **React**: `vitest`
-* **Django**: `python manage.py test`
-* **.NET**: Console-based validation
-
----
-
-## ⚙️ Variabel Lingkungan (.env)
-
-| Variabel | Deskripsi |
-| --- | --- |
-| `POSTGRES_USER` | Username untuk database PostgreSQL. |
-| `POSTGRES_PASSWORD` | Password untuk database PostgreSQL. |
-| `VITE_AUTH_API` | URL endpoint untuk Auth Service. |
-| `VITE_BOOKS_API` | URL endpoint untuk Books Service. |
-| `VITE_REVIEWS_API` | URL endpoint untuk Reviews Service. |
-
----
-
-**BooksLib** dibuat dengan prinsip kesederhanaan (*KISS*) dan kemudahan *deployment* sebagai referensi arsitektur mikroservis bagi pengembang.
+## Yang Akan Diperbaiki Jika Ada Waktu Lebih
+- Upgrade Go ke 1.21+ dan fix gosec
+- Upgrade Django ke versi terbaru
+- Implementasi zero-downtime deployment dengan K3s
+- Tambah unit test stage di pipeline
+- Implementasi secret scanning dengan GitLeaks
+- Fix SQL injection di auth-service loginHandler
