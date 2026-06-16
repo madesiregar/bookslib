@@ -19,7 +19,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm -v $(pwd)/reviews-service:/app \
-                        cytopia/bandit bandit /app -f json \
+			cytopia/bandit bandit -r /app -f json \
                         -o /app/bandit-report.json || true
 
                     cp reviews-service/bandit-report.json bandit-report.json 2>/dev/null || echo '{"results":[]}' > bandit-report.json
