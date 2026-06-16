@@ -141,29 +141,45 @@ print(total)
                 withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
 
                     sh '''
-                        export GH_TOKEN=$GH_TOKEN
-
-
                         echo "Checking security issues..."
 
-                        gh issue list \
-                          --repo $GITHUB_REPO \
-                          --label security \
-                          --state open \
-                          --json number,title \
-                          --jq '.[] | .number' |
-
-                        while read ISSUE; do
-
-                            echo "Closing issue #$ISSUE"
-
-
-                            gh issue close $ISSUE \
-                              --repo $GITHUB_REPO \
-                              --comment "Automatically closed by Jenkins after successful pipeline."
+                        ISSUES=$(curl -s \
+                        -H "Authorization: token $GH_TOKEN" \
+                        -H "Accept: application/vnd.github+json" \
+                        https://api.github.com/repos/$GITHUB_REPO/issues?state=open \
+                        | python3 -c "
+import json,sys
+data=json.load(sys.stdin)
+for i in data:
+    labels=[x['name'] for x in i.get('labels',[])]
+    if 'security' in labels:
+        print(i['number'])
+")
 
 
-                        done
+                        if [ -z "$ISSUES" ]; then
+
+                            echo "No security issues found"
+
+                        else
+
+                            for ISSUE in $ISSUES
+                            do
+
+                                echo "Closing issue #$ISSUE"
+
+
+                                curl -s \
+                                -X PATCH \
+                                -H "Authorization: token $GH_TOKEN" \
+                                -H "Accept: application/vnd.github+json" \
+                                https://api.github.com/repos/$GITHUB_REPO/issues/$ISSUE \
+                                -d '{"state":"closed"}'
+
+                            done
+
+                        fi
+
                     '''
 
                 }
@@ -171,7 +187,6 @@ print(total)
             }
 
         }
-
 
 
 
