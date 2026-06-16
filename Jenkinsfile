@@ -88,7 +88,7 @@ except:
                         echo "Bandit findings: $BANDIT_COUNT"
 
 
-                        if [ "$BANDIT_COUNT" -gt 0 ]; then
+                        if true; then
 
                             gh issue create \
                             --repo $GITHUB_REPO \
@@ -118,7 +118,7 @@ print(total)
 
 
 
-                        if [ "$TRIVY_COUNT" -gt 0 ]; then
+                        if true; then
 
                             gh issue create \
                             --repo $GITHUB_REPO \
