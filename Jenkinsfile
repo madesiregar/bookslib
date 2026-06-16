@@ -33,7 +33,7 @@ pipeline {
                 sh '''
                     docker run --rm -v $(pwd)/auth-service:/app \
                         -w /app \
-                        golang:1.23-alpine sh -c \
+                        golang:1.25-alpine sh -c \
                         "go install github.com/securego/gosec/v2/cmd/gosec@latest && \
                         gosec -fmt=json -out=/app/gosec-report.json ./... || true"
 
