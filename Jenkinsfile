@@ -15,7 +15,7 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm -v $(pwd)/reviews-service:/app \
-                        cytopia/bandit bandit -r /app -f json \
+                        cytopia/bandit bandit /app -f json \
                         -o /app/bandit-report.json || true
                     cp reviews-service/bandit-report.json bandit-report.json 2>/dev/null || echo '{"results":[]}' > bandit-report.json
                 '''
@@ -27,7 +27,7 @@ pipeline {
                 sh '''
                     docker run --rm -v $(pwd)/auth-service:/app \
                         -w /app \
-                        golang:1.20-alpine sh -c \
+                        golang:1.23-alpine sh -c \
                         "go install github.com/securego/gosec/v2/cmd/gosec@latest && \
                         gosec -fmt=json -out=/app/gosec-report.json ./... || true"
                     cp auth-service/gosec-report.json gosec-report.json 2>/dev/null || echo '{}' > gosec-report.json
@@ -85,7 +85,7 @@ lines = ['## Bandit SAST Findings', '']
 for item in r.get('results', [])[:10]:
     lines.append('- [' + item['issue_severity'] + '] ' + item['issue_text'])
     lines.append('  File: ' + item['filename'] + ':' + str(item['line_number']))
-print('\n'.join(lines))
+print('\\n'.join(lines))
 ")
                                 gh issue create \
                                     --repo $GITHUB_REPO \
@@ -126,7 +126,7 @@ for fname, service in [('trivy-auth.json','auth-service'), ('trivy-reviews.json'
                 lines.append('  Package: ' + v['PkgName'] + ' (' + service + ')')
     except:
         pass
-print('\n'.join(lines))
+print('\\n'.join(lines))
 ")
                                 gh issue create \
                                     --repo $GITHUB_REPO \
