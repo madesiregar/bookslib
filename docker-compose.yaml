@@ -24,7 +24,7 @@ services:
     env_file:
       - ./frontend/.env
     ports:
-      - "3000:80"
+      - "8089:80"
     depends_on:
       auth-service:
         condition: service_started
@@ -38,9 +38,9 @@ services:
   auth-service:
     build: ./auth-service
     ports:
-      - "8081:8081"
+      - "8086:8081"
     environment:
-      - DB_DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/auth_db?sslmode=disable
+    - DB_DSN=postgres://postgres:secret@db:5432/postgres?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
   books-service:
     build: ./books-service
     ports:
-      - "8082:8080"
+      - "8087:8080"
     environment:
       - ConnectionStrings__DefaultConnection=Host=db;Database=books_db;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
     depends_on:
@@ -62,7 +62,7 @@ services:
   reviews-service:
     build: ./reviews-service
     ports:
-      - "8083:8000"
+      - "8088:8000"
     environment:
       - DB_NAME=reviews_db
       - DB_USER=${POSTGRES_USER}
