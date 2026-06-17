@@ -144,4 +144,4 @@ post {
         archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
     }
 }
-
+}
