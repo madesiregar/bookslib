@@ -1,238 +1,220 @@
 pipeline {
-    agent any
+agent any
 
-    environment {
-        COMPOSE_FILE = 'docker-compose.yaml'
-        GITHUB_REPO = 'madesiregar/bookslib'
+```
+environment {
+    COMPOSE_FILE = 'docker-compose.yaml'
+    GITHUB_REPO = 'madesiregar/bookslib'
+}
+
+stages {
+
+    stage('Checkout') {
+        steps {
+            checkout scm
+        }
     }
 
-    stages {
+    stage('SAST - Bandit (Python)') {
+        steps {
+            sh '''
+                rm -f bandit-report.json
 
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
+                docker run --rm \
+                    -v $(pwd)/reviews-service:/app \
+                    cytopia/bandit \
+                    -r /app \
+                    -f json \
+                    -o /app/bandit-report.json || true
+
+                cp reviews-service/bandit-report.json bandit-report.json \
+                2>/dev/null || echo '{"results":[]}' > bandit-report.json
+
+                echo "===== BANDIT RESULT ====="
+                cat bandit-report.json
+            '''
         }
+    }
 
+    stage('SAST - Gosec (Go)') {
+        steps {
+            sh '''
+                rm -f gosec-report.json
 
-        stage('SAST - Bandit (Python)') {
-            steps {
+                docker run --rm \
+                    -v $(pwd)/auth-service:/app \
+                    -w /app \
+                    securego/gosec \
+                    -fmt=json \
+                    -out=gosec-report.json \
+                    ./... || true
+
+                cp auth-service/gosec-report.json gosec-report.json \
+                2>/dev/null || echo '{}' > gosec-report.json
+            '''
+        }
+    }
+
+    stage('Build Docker Images') {
+        steps {
+            sh '''
+                docker compose build
+            '''
+        }
+    }
+
+    stage('Image Scan - Trivy') {
+        steps {
+            sh '''
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v $(pwd):/workspace \
+                    aquasec/trivy image \
+                    --severity HIGH,CRITICAL \
+                    --format json \
+                    -o /workspace/trivy-auth.json \
+                    bookslib-auth-service || true
+
+                docker run --rm \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v $(pwd):/workspace \
+                    aquasec/trivy image \
+                    --severity HIGH,CRITICAL \
+                    --format json \
+                    -o /workspace/trivy-reviews.json \
+                    bookslib-reviews-service || true
+            '''
+        }
+    }
+
+    stage('Create GitHub Security Issues') {
+        steps {
+
+            withCredentials([
+                string(credentialsId: 'github-token', variable: 'GH_TOKEN')
+            ]) {
+
                 sh '''
-                    docker run --rm -v $(pwd)/reviews-service:/app \
-			cytopia/bandit bandit -r /app -f json \
-                        -o /app/bandit-report.json || true
+                    export GH_TOKEN=$GH_TOKEN
 
-                    cp reviews-service/bandit-report.json bandit-report.json 2>/dev/null || echo '{"results":[]}' > bandit-report.json
-                '''
-            }
-        }
+                    echo "Checking GitHub CLI..."
 
+                    gh auth status || {
+                        echo "GitHub authentication failed"
+                        exit 0
+                    }
 
-        stage('SAST - Gosec (Go)') {
-            steps {
-                sh '''
-                    docker run --rm -v $(pwd)/auth-service:/app \
-                        -w /app \
-                        golang:1.25-alpine sh -c \
-                        "go install github.com/securego/gosec/v2/cmd/gosec@latest && \
-                        gosec -fmt=json -out=/app/gosec-report.json ./... || true"
+                    BANDIT_COUNT=$(python3 - <<EOF
+```
 
-                    cp auth-service/gosec-report.json gosec-report.json 2>/dev/null || echo '{}' > gosec-report.json
-                '''
-            }
-        }
-
-
-        stage('Build Docker Images') {
-            steps {
-                sh 'docker compose build'
-            }
-        }
-
-
-        stage('Image Scan - Trivy') {
-            steps {
-                sh '''
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                        aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL \
-                        --format json -o trivy-auth.json \
-                        bookslib-auth-service || true
-
-
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-                        aquasec/trivy image --exit-code 0 --severity HIGH,CRITICAL \
-                        --format json -o trivy-reviews.json \
-                        bookslib-reviews-service || true
-                '''
-            }
-        }
-
-
-        stage('Create GitHub Issues if Findings') {
-            steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-
-                    sh '''
-                        export GH_TOKEN=$GH_TOKEN
-
-
-                        BANDIT_COUNT=$(python3 -c "
 import json
+
 try:
-    r=json.load(open('bandit-report.json'))
-    print(len(r.get('results', [])))
+with open("bandit-report.json") as f:
+data=json.load(f)
+
+```
+print(len(data.get("results",[])))
+```
+
 except:
-    print(0)
-")
+print(0)
+EOF
+)
 
-                        echo "Bandit findings: $BANDIT_COUNT"
+```
+                    echo "Bandit findings: $BANDIT_COUNT"
 
+                    if [ "$BANDIT_COUNT" -gt 0 ]; then
 
-                        if true; then
+                        gh issue create \
+                        --repo $GITHUB_REPO \
+                        --title "Security Finding - Bandit Build #${BUILD_NUMBER}" \
+                        --body "Bandit detected $BANDIT_COUNT security finding(s). Review Jenkins artifacts." \
+                        --label security || true
 
-                            gh issue create \
-                            --repo $GITHUB_REPO \
-                            --title "Bandit Finding Build #${BUILD_NUMBER}" \
-                            --body "Bandit detected security findings. Check Jenkins report." \
-                            --label security
+                    fi
 
-                        fi
+                    TRIVY_COUNT=$(python3 - <<EOF
+```
 
-
-
-                        TRIVY_COUNT=$(python3 -c "
 import json
+
 total=0
-for f in ['trivy-auth.json','trivy-reviews.json']:
-    try:
-        r=json.load(open(f))
-        for x in r.get('Results',[]):
-            total += len(x.get('Vulnerabilities',[]))
-    except:
-        pass
+
+for file in ["trivy-auth.json","trivy-reviews.json"]:
+
+```
+try:
+    with open(file) as f:
+        data=json.load(f)
+
+    for r in data.get("Results",[]):
+        total += len(r.get("Vulnerabilities",[]))
+
+except:
+    pass
+```
+
 print(total)
-")
+EOF
+)
 
+```
+                    echo "Trivy findings: $TRIVY_COUNT"
 
-                        echo "Trivy findings: $TRIVY_COUNT"
+                    if [ "$TRIVY_COUNT" -gt 0 ]; then
 
+                        gh issue create \
+                        --repo $GITHUB_REPO \
+                        --title "Security Finding - Trivy Build #${BUILD_NUMBER}" \
+                        --body "Trivy detected $TRIVY_COUNT image vulnerability findings. Review Jenkins artifacts." \
+                        --label security || true
 
+                    fi
 
-                        if true; then
-
-                            gh issue create \
-                            --repo $GITHUB_REPO \
-                            --title "Trivy Finding Build #${BUILD_NUMBER}" \
-                            --body "Trivy detected image vulnerabilities. Check Jenkins report." \
-                            --label security
-
-                        fi
-                    '''
-                }
+                '''
             }
         }
-
-
-
-        stage('Auto Close Fixed Security Issues') {
-
-            steps {
-
-                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-
-                    sh '''
-                        echo "Checking security issues..."
-
-                        ISSUES=$(curl -s \
-                        -H "Authorization: token $GH_TOKEN" \
-                        -H "Accept: application/vnd.github+json" \
-                        https://api.github.com/repos/$GITHUB_REPO/issues?state=open \
-                        | python3 -c "
-import json,sys
-data=json.load(sys.stdin)
-for i in data:
-    labels=[x['name'] for x in i.get('labels',[])]
-    if 'security' in labels:
-        print(i['number'])
-")
-
-
-                        if [ -z "$ISSUES" ]; then
-
-                            echo "No security issues found"
-
-                        else
-
-                            for ISSUE in $ISSUES
-                            do
-
-                                echo "Closing issue #$ISSUE"
-
-
-                                curl -s \
-                                -X PATCH \
-                                -H "Authorization: token $GH_TOKEN" \
-                                -H "Accept: application/vnd.github+json" \
-                                https://api.github.com/repos/$GITHUB_REPO/issues/$ISSUE \
-                                -d '{"state":"closed"}'
-
-                            done
-
-                        fi
-
-                    '''
-
-                }
-
-            }
-
-        }
-
-
-
-        stage('Deploy') {
-
-            steps {
-
-                withCredentials([file(credentialsId: 'bookslib-env', variable: 'ENV_FILE')]) {
-
-                    sh '''
-                        cp $ENV_FILE .env
-
-                        docker compose down || true
-
-                        docker compose up -d
-
-                        sleep 10
-
-                        docker compose ps
-                    '''
-
-                }
-
-            }
-
-        }
-
     }
 
+    stage('Deploy') {
+        steps {
 
+            withCredentials([
+                file(credentialsId: 'bookslib-env', variable: 'ENV_FILE')
+            ]) {
 
-    post {
+                sh '''
+                    cp $ENV_FILE .env
 
-        success {
+                    docker compose down || true
 
-            echo 'Pipeline completed successfully!'
+                    docker compose up -d
 
+                    sleep 15
+
+                    docker compose ps
+                '''
+            }
         }
-
-
-        failure {
-
-            echo 'Pipeline failed!'
-
-        }
-
     }
+}
+
+post {
+
+    always {
+        archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
+    }
+
+    success {
+        echo 'Pipeline completed successfully!'
+    }
+
+    failure {
+        echo 'Pipeline failed!'
+    }
+}
+```
 
 }
