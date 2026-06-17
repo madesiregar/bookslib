@@ -64,7 +64,7 @@ stage('Create GitHub Security Issues') {
                 TRIVY_COUNT=$(python3 -c "
 import json
 total = 0
-for f in ['$WORKSPACE_PATH/trivy-auth.json', '$WORKSPACE_PATH/trivy-reviews.json']:
+for f in ['/var/jenkins_home/workspace/bookslib-pipeline/trivy-auth.json', '/var/jenkins_home/workspace/bookslib-pipeline/trivy-reviews.json']:
     try:
         d = json.load(open(f))
         for r in d.get('Results', []):
