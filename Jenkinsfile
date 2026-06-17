@@ -45,12 +45,12 @@ stage('Image Scan - Trivy') {
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v $WORKSPACE_PATH:/workspace \
                 aquasec/trivy image --severity HIGH,CRITICAL --format json \
-                -o /workspace/trivy-auth.json bookslib-pipeline-auth-service
+                -o /workspace/trivy-auth.json bookslib-pipeline2-auth-service
             docker run --rm \
                 -v /var/run/docker.sock:/var/run/docker.sock \
                 -v $WORKSPACE_PATH:/workspace \
                 aquasec/trivy image --severity HIGH,CRITICAL --format json \
-                -o /workspace/trivy-reviews.json bookslib-pipeline-reviews-service
+                -o /workspace/trivy-reviews.json bookslib-pipeline2-reviews-service
         '''
     }
 }
