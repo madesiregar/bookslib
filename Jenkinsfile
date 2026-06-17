@@ -47,42 +47,35 @@ pipeline {
             }
         }
 
-        stage('Create GitHub Security Issues') {
-            steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
-                    sh '''
-                        export GH_TOKEN=$GH_TOKEN
-                        echo "$GH_TOKEN" | gh auth login --with-token || true
+stage('Create GitHub Security Issues') {
+    steps {
+        withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
+            sh '''
+                export GH_TOKEN=$GH_TOKEN
+                echo "$GH_TOKEN" | gh auth login --with-token || true
 
-TRIVY_COUNT=$(python3 -c "
-import json, os
+                TRIVY_COUNT=$(python3 -c "
+import json
 total = 0
 for f in ['trivy-auth.json', 'trivy-reviews.json']:
     try:
         d = json.load(open(f))
-        results = d.get('Results', [])
-        if results:
-            for r in results:
-                vulns = r.get('Vulnerabilities', [])
-                if vulns:
-                    total += len(vulns)
-    except Exception as e:
-        pass
+        for r in d.get('Results', []):
+            total += len(r.get('Vulnerabilities', []) or [])
+    except: pass
 print(total)
-")                        echo "Trivy findings: $TRIVY_COUNT"
-
-                        if [ "$TRIVY_COUNT" -gt 0 ]; then
-                            gh issue create \
-                                --repo madesiregar/bookslib \
-                                --title "[AUTO] Trivy found $TRIVY_COUNT CVEs - Build #${BUILD_NUMBER}" \
-                                --body "Trivy image scan detected $TRIVY_COUNT HIGH/CRITICAL vulnerabilities. Please review and fix." \
-                                --label security || true
-                        fi
-                    '''
-                }
-            }
+")
+                echo "Trivy findings: $TRIVY_COUNT"
+                if [ "$TRIVY_COUNT" -gt 0 ]; then
+                    gh issue create \
+			--repo madesiregar/bookslib
+                        --title "Security: $TRIVY_COUNT vulnerabilities found" \
+                        --body "Trivy scan found $TRIVY_COUNT HIGH/CRITICAL vulnerabilities. Check trivy-auth.json and trivy-reviews.json for details."
+                fi
+            '''
         }
-
+    }
+}
         stage('Deploy') {
             steps {
                 withCredentials([file(credentialsId: 'bookslib-env', variable: 'ENV_FILE')]) {
