@@ -41,7 +41,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-    - DB_DSN=postgres://postgres:secret@db:5432/postgres?sslmode=disable
+      - DB_DSN=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
