@@ -54,11 +54,11 @@ stages {
     stage('Image Scan - Trivy') {
         steps {
             sh '''
-            rm -f trivy-auth.json
+            rm -f "${WORKSPACE}/trivy-auth.json"
 
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
-              -v $(pwd):/workspace \
+              -v "${WORKSPACE}":/workspace \
               aquasec/trivy image \
               --skip-version-check \
               --severity HIGH,CRITICAL \
@@ -67,7 +67,7 @@ stages {
               bookslib-auth-service
 
             echo "=== VERIFY TRIVY REPORT ==="
-            ls -lah trivy-auth.json
+            ls -lah "${WORKSPACE}/trivy-auth.json"
             '''
         }
     }
@@ -79,21 +79,20 @@ stages {
             ]) {
                 script {
 
-                    sh 'test -f trivy-auth.json'
+                    sh 'test -f "${WORKSPACE}/trivy-auth.json"'
 
                     def trivyCount = sh(
                         script: '''
                         python3 - <<EOF
-```
 
 import json
 
-with open("trivy-auth.json") as f:
-data = json.load(f)
+with open("${WORKSPACE}/trivy-auth.json") as f:
+    data = json.load(f)
 
 count = 0
 for r in data.get("Results", []):
-count += len(r.get("Vulnerabilities", []))
+    count += len(r.get("Vulnerabilities", []))
 
 print(count)
 EOF
@@ -101,7 +100,6 @@ EOF
 returnStdout: true
 ).trim().toInteger()
 
-```
                     echo "Total Vulnerabilities: ${trivyCount}"
 
                     if (trivyCount > 0) {
