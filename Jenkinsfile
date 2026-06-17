@@ -37,27 +37,34 @@ pipeline {
                 sh 'docker compose build'
             }
         }
-
-        stage('Image Scan - Trivy') {
-            steps {
-                sh '''
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(pwd):/workspace aquasec/trivy image --severity HIGH,CRITICAL --format json -o /workspace/trivy-auth.json bookslib-auth-service || true
-                    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v $(pwd):/workspace aquasec/trivy image --severity HIGH,CRITICAL --format json -o /workspace/trivy-reviews.json bookslib-reviews-service || true
-                '''
-            }
-        }
+stage('Image Scan - Trivy') {
+    steps {
+        sh '''
+            WORKSPACE_PATH=$(pwd)
+            docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE_PATH:/workspace \
+                aquasec/trivy image --severity HIGH,CRITICAL --format json \
+                -o /workspace/trivy-auth.json bookslib-pipeline-auth-service
+            docker run --rm \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v $WORKSPACE_PATH:/workspace \
+                aquasec/trivy image --severity HIGH,CRITICAL --format json \
+                -o /workspace/trivy-reviews.json bookslib-pipeline-reviews-service
+        '''
+    }
+}
 
 stage('Create GitHub Security Issues') {
     steps {
         withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
             sh '''
-                export GH_TOKEN=$GH_TOKEN
+                WORKSPACE_PATH=$(pwd)
                 echo "$GH_TOKEN" | gh auth login --with-token || true
-
                 TRIVY_COUNT=$(python3 -c "
 import json
 total = 0
-for f in ['trivy-auth.json', 'trivy-reviews.json']:
+for f in ['$WORKSPACE_PATH/trivy-auth.json', '$WORKSPACE_PATH/trivy-reviews.json']:
     try:
         d = json.load(open(f))
         for r in d.get('Results', []):
@@ -68,9 +75,9 @@ print(total)
                 echo "Trivy findings: $TRIVY_COUNT"
                 if [ "$TRIVY_COUNT" -gt 0 ]; then
                     gh issue create \
-			--repo madesiregar/bookslib
+                        --repo madesiregar/bookslib \
                         --title "Security: $TRIVY_COUNT vulnerabilities found" \
-                        --body "Trivy scan found $TRIVY_COUNT HIGH/CRITICAL vulnerabilities. Check trivy-auth.json and trivy-reviews.json for details."
+                        --body "Trivy scan found $TRIVY_COUNT HIGH/CRITICAL vulnerabilities."
                 fi
             '''
         }
