@@ -39,22 +39,23 @@ pipeline {
         }
 stage('Image Scan - Trivy') {
     steps {
-        sh '''
-            WORKSPACE_PATH=$(pwd)
-            docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE_PATH:/workspace \
-                aquasec/trivy image --severity HIGH,CRITICAL --format json \
-                -o /workspace/trivy-auth.json bookslib-auth-service
-            docker run --rm \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v $WORKSPACE_PATH:/workspace \
-                aquasec/trivy image --severity HIGH,CRITICAL --format json \
-                -o /workspace/trivy-reviews.json bookslib-reviews-service
-        '''
+        // Kita buat folder cache lokal agar download-nya cuma sekali
+        sh "mkdir -p ${env.WORKSPACE}/.trivy-cache"
+        
+        sh """
+        docker run --rm \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v ${env.WORKSPACE}:/workspace \
+          -v ${env.WORKSPACE}/.trivy-cache:/root/.cache/trivy \
+          aquasec/trivy image \
+          --severity HIGH,CRITICAL \
+          --format json \
+          -o /workspace/trivy-auth.json \
+          --timeout 15m \
+          bookslib-auth-service
+        """
     }
 }
-
 stage('Create GitHub Security Issues') {
     steps {
         withCredentials([string(credentialsId: 'github-token', variable: 'GH_TOKEN')]) {
