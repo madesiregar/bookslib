@@ -1,10 +1,9 @@
 pipeline {
-agent any
+    agent any
 
-```
-environment {
-    GITHUB_REPO = 'madesiregar/bookslib'
-}
+    environment {
+        GITHUB_REPO = 'madesiregar/bookslib'
+    }
 
 stages {
 
@@ -145,6 +144,4 @@ post {
         archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
     }
 }
-```
 
-}
