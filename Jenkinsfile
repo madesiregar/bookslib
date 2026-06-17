@@ -54,18 +54,22 @@ pipeline {
                         export GH_TOKEN=$GH_TOKEN
                         echo "$GH_TOKEN" | gh auth login --with-token || true
 
-                        TRIVY_COUNT=$(python3 -c "
-import json
+TRIVY_COUNT=$(python3 -c "
+import json, os
 total = 0
 for f in ['trivy-auth.json', 'trivy-reviews.json']:
     try:
         d = json.load(open(f))
-        for r in d.get('Results', []):
-            total += len(r.get('Vulnerabilities', []) or [])
-    except: pass
+        results = d.get('Results', [])
+        if results:
+            for r in results:
+                vulns = r.get('Vulnerabilities', [])
+                if vulns:
+                    total += len(vulns)
+    except Exception as e:
+        pass
 print(total)
-")
-                        echo "Trivy findings: $TRIVY_COUNT"
+")                        echo "Trivy findings: $TRIVY_COUNT"
 
                         if [ "$TRIVY_COUNT" -gt 0 ]; then
                             gh issue create \
