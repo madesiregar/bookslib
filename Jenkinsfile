@@ -16,7 +16,7 @@ pipeline {
         // Jalankan Gitleaks untuk scan kebocoran password/token/key
         stage('Secret Scanning - Gitleaks') {
             steps {
-                sh 'docker run --rm -v ${WORKSPACE}:/path zricethezaza/gitleaks:latest detect --source=/path --report-format=json --report-path=/path/gitleaks-report.json || true'
+                sh 'docker run --rm -v ${WORKSPACE}:/app golang:latest sh -c "cd /app/auth-service && go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./..." > govulncheck-report.json'
             }
         }
 
