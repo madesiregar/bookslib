@@ -41,13 +41,13 @@ pipeline {
                     }
                 }
                 stage('Go - govulncheck') {
-                    steps {
-                        sh 'docker run --rm -v ${WORKSPACE}:/app golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && cd /app && govulncheck -json ./... > /app/govulncheck-report.json" || true'
-                    }
-                }
+            steps {
+                sh '''
+                    docker run --rm -v ${WORKSPACE}:/app -w /app/auth-service golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./... > /app/govulncheck-report.json"
+                '''
             }
         }
-
+       
         stage('Build Docker Images') {
             steps {
                 sh 'docker compose build'
