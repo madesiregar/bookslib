@@ -16,7 +16,7 @@ pipeline {
         // Jalankan Gitleaks untuk scan kebocoran password/token/key
         stage('Secret Scanning - Gitleaks') {
             steps {
-               sh 'docker run --rm -v ${WORKSPACE}:/app -w /app/auth-service golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./..." > govulncheck-report.json'
+                sh 'docker run --rm -v ${WORKSPACE}:/path zricethezav/gitleaks:latest detect --source=/path --report-path=/path/gitleaks-report.json || true'
             }
         }
 
@@ -27,7 +27,7 @@ pipeline {
             }
         }
 
-        // Tahap pengecekan kerentanan pada library/dependencies secara PARALEL
+        // Pengecekan kerentanan pada library/dependencies secara PARALEL
         stage('Dependency Scan') {
             parallel {
                 stage('Python - pip-audit') {
@@ -41,12 +41,14 @@ pipeline {
                     }
                 }
                 stage('Go - govulncheck') {
-            steps {
-                sh '''
-                    docker run --rm -v ${WORKSPACE}:/app -w /app/auth-service golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./... > /app/govulncheck-report.json"
-                '''
-            }
-        }
+                    steps {
+                        sh '''
+                            docker run --rm -v ${WORKSPACE}:/app -w /app/auth-service golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./... > /app/govulncheck-report.json"
+                        '''
+                    }
+                }
+            } // <--- Penutup parallel (Tadinya hilang)
+        } // <--- Penutup Dependency Scan (Tadinya hilang)
        
         stage('Build Docker Images') {
             steps {
@@ -77,7 +79,7 @@ pipeline {
             }
         }
 
-        // TAMBAHAN 2: Otomatisasi pembuatan Issue di GitHub jika ditemukan celah (Syarat Track A)
+        // TAMBAHAN 2: Otomatisasi pembuatan Issue di GitHub jika ditemukan celah
         stage('Document Automation Issues to GitHub') {
             steps {
                 echo "Mendokumentasikan hasil temuan security ke GitHub Issues..."
@@ -106,11 +108,9 @@ pipeline {
             }
             steps {
                 echo "Deploying application to Production environment..."
-                // Jika ada docker-compose prod tersendiri, jalankan di sini
-                // sh 'docker compose -f docker-compose.prod.yml up -d'
             }
         }
-    }
+    } 
     
     post {
         always {
