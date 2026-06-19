@@ -4,6 +4,7 @@ pipeline {
     environment {
         // Definisikan image name aplikasi kamu di sini
         IMAGE_NAME = "bookslib-auth-service"
+        CLEAN_BRANCH = "${env.GIT_BRANCH ? env.GIT_BRANCH.replaceAll('origin/', '') : 'develop'}"
     }
 
     stages {
@@ -27,25 +28,28 @@ pipeline {
             }
         }
 
-        // Pengecekan kerentanan pada library/dependencies secara PARALEL sesuai struktur folder asli
+       // Pengecekan kerentanan pada library/dependencies secara PARALEL dengan kutip yang diperketat
         stage('Dependency Scan') {
             parallel {
                 stage('Python - pip-audit') {
                     steps {
-                        // Diarahkan langsung ke subfolder reviews-service
-                        sh 'docker run --rm -v ${WORKSPACE}:/app python:3.9-slim sh -c "pip install pip-audit && pip-audit -r /app/reviews-service/requirements.txt --format json -o /app/pip-audit-report.json" || true'
+                        sh '''
+                            docker run --rm -v "${WORKSPACE}":/app python:3.9-slim sh -c "pip install pip-audit && pip-audit -r /app/reviews-service/requirements.txt --format json -o /app/pip-audit-report.json" || true
+                        '''
                     }
                 }
                 stage('Node.js - npm audit') {
                     steps {
-                        // Masuk ke folder frontend, buat lockfile darurat, lalu jalankan audit
-                        sh 'docker run --rm -v ${WORKSPACE}:/app node:alpine sh -c "cd /app/frontend && npm i --package-lock-only && npm audit --json > /app/npm-audit-report.json" || true'
+                        sh '''
+                            docker run --rm -v "${WORKSPACE}":/app node:alpine sh -c "cd /app/frontend && npm i --package-lock-only && npm audit --json > /app/npm-audit-report.json" || true
+                        '''
                     }
                 }
                 stage('Go - govulncheck') {
                     steps {
-                        // Menggunakan kutip tunggal (') di dalam sh -c agar seluruh perintah dieksekusi di dalam Docker auth-service
-                        sh "docker run --rm -v \${WORKSPACE}:/app -w /app/auth-service golang:latest sh -c 'go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./... > /app/govulncheck-report.json' || true"
+                        sh '''
+                            docker run --rm -v "${WORKSPACE}":/app -w /app/auth-service golang:latest sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -json ./... > /app/govulncheck-report.json" || true
+                        '''
                     }
                 }
             }
