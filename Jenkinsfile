@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        // Definisikan image name aplikasi kamu di sini
+        
         IMAGE_NAME = "bookslib-auth-service"
         CLEAN_BRANCH = "${env.GIT_BRANCH ? env.GIT_BRANCH.replaceAll('origin/', '') : 'develop'}"
     }
