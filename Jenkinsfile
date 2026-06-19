@@ -94,7 +94,7 @@ pipeline {
                         curl -X POST -H "Authorization: token \$GH_TOKEN" \
                         -H "Accept: application/vnd.github.v3+json" \
                         https://api.github.com/repos/\$GH_USER/bookslib/issues \
-                        -d '{"title": "🚨 DevSecOps Alert: Vulnerabilities Detected in Build #${BUILD_NUMBER}", "body": "Halo Tim Developer,\\n\\nPipeline otomatis telah menyelesaikan pemindaian keamanan pada branch **${BRANCH_NAME}**. Ditemukan beberapa potensi celah keamanan.\\n\\nSilakan periksa berkas laporan **JSON Artifacts** langsung di server Jenkins untuk detail mitigasi Semgrep, Gitleaks, dan Trivy.\\n\\nSalam,\\nJenkins Bot", "labels": ["bug", "security"]}' || true
+                       -d '{"title": "🚨 DevSecOps Alert: Vulnerabilities Detected in Build #${BUILD_NUMBER}", "body": "Halo Tim Developer,\\n\\nPipeline otomatis telah menyelesaikan pemindaian keamanan pada branch **${env.CLEAN_BRANCH}**. Ditemukan beberapa potensi celah keamanan.\\n\\nSilakan periksa berkas laporan **JSON Artifacts** langsung di server Jenkins untuk detail mitigasi Semgrep, Gitleaks, dan Trivy.\\n\\nSalam,\\nJenkins Bot", "labels": ["bug", "security"]}' || true
                     """
                 }
             }
